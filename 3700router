@@ -2,15 +2,30 @@
 
 import argparse, socket, time, json, select, struct, sys, math
 
-class Router:
 
+class Router:
+    # enum: CUST | PROV | PEER
     relations = {}
+    # list of UDP sockets 
     sockets = {}
+    # list of ports in router, each port has a UDP socket 
     ports = {}
+    # forwarding table holds key, value 
+    # key - ip address of source
+    # value - dictionary:  
+    #               - "network":    "<network prefix>",             # Example: 12.0.0.0
+    #               - "netmask":    "<associated subnet netmask>",  # Example: 255.0.0.0
+    #               - "localpref":  "<integer>",                    # Example: 100
+    #               - "selfOrigin": "<true|false>",
+    #               - "ASPath":     "{<nid>, [nid], ...}",          # Examples: [1] or [3, 4] or [1, 4, 3]
+    #               - "origin":     "<IGP|EGP|UNK>"            (ip address of destination network , destination network netmask)
+    #global FWD_TABLE 
+    global fwd_table
 
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
         self.asn = asn
+        #self.fwd_table = {}
         for relationship in connections:
             port, neighbor, relation = relationship.split("-")
 
@@ -38,15 +53,32 @@ class Router:
                     if self.sockets[sock] == conn:
                         srcif = sock
                         break
+                # a specific message for the current socket in the list of sockets 
                 msg = k.decode('utf-8')
 
                 print("Received message '%s' from %s" % (msg, srcif))
-                print("------deserialize-----/n")
+                print("------deserialize-----")
                 msg_dict = json.loads(msg)
-                print("msg src: ", msg_dict["src"], "/n")
-                print("msg dst: ", msg_dict["dst"], "/n")
-                print("--------------------/n")
-        return
+                print("msg src: ", msg_dict["src"])
+                print("msg dst: ", msg_dict["dst"])
+                print("msg type: ", msg_dict["type"])
+                print("msg msg: ", msg_dict["msg"])
+                print("--------------------")
+
+                # Choose what to do with the received messaged based on the type
+                # if an update message, update the forwarding table 
+                if(msg_dict["type"] == "update"):
+                    router.update_fwd_table(msg_dict) 
+                # if a data message, forward (send) the message to its dest    
+                elif(msg_dict["type"] == "data"):
+                    # in the future this will be where we handle data forwarding logic  
+                    sock.send(msg_dict["dst"]["network"], msg_dict["msg"])    
+                return
+    
+    def update_fwd_table(update_msg_dict):
+        #do something
+        fwd_table[update_msg_dict["src"]] = update_msg_dict["msg"]
+        print("---updated fwd table---")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='route packets')
