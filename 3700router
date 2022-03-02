@@ -1,6 +1,7 @@
 #!/usr/bin/env -S python3 -u
 
 import argparse, socket, time, json, select, struct, sys, math
+from concurrent.futures.process import _MAX_WINDOWS_WORKERS
 
 
 class Router:
@@ -25,14 +26,16 @@ class Router:
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
         self.asn = asn
-        #self.fwd_table = {}
         for relationship in connections:
             port, neighbor, relation = relationship.split("-")
-
             self.sockets[neighbor] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sockets[neighbor].bind(('localhost', 0))
             self.ports[neighbor] = int(port)
             self.relations[neighbor] = relation
+
+            print(type (neighbor))
+            print(neighbor)
+
             self.send(neighbor, json.dumps({ "type": "handshake", "src": self.our_addr(neighbor), "dst": neighbor, "msg": {}  }))
 
     def our_addr(self, dst):
@@ -41,7 +44,22 @@ class Router:
         return "%d.%d.%d.%d" % (quads[0], quads[1], quads[2], quads[3])
 
     def send(self, network, message):
+        print("send method's network: ", network)
+        print("send method's message: ", message)
+
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
+
+    def update_fwd_table(self, update_msg_dict):
+        #do something
+        self.fwd_table[update_msg_dict["dst"]] = update_msg_dict["msg"]
+        print("---updated fwd table---")
+        self.print_table()
+        
+    def print_table(self):    
+        print("------TABLE-------")
+        print(self.fwd_table)
+        print("------------------")
+        
 
     def run(self):
         while True:
@@ -57,28 +75,73 @@ class Router:
                 msg = k.decode('utf-8')
 
                 print("Received message '%s' from %s" % (msg, srcif))
-                print("------deserialize-----")
                 msg_dict = json.loads(msg)
-                print("msg src: ", msg_dict["src"])
-                print("msg dst: ", msg_dict["dst"])
-                print("msg type: ", msg_dict["type"])
-                print("msg msg: ", msg_dict["msg"])
-                print("--------------------")
+                # print("------deserialize-----")
+                # print("msg src: ", msg_dict["src"])
+                # print("msg dst: ", msg_dict["dst"])
+                # print("msg type: ", msg_dict["type"])
+                # print("msg msg: ", msg_dict["msg"])
+                # print("--------------------")
 
                 # Choose what to do with the received messaged based on the type
+
                 # if an update message, update the forwarding table 
                 if(msg_dict["type"] == "update"):
-                    router.update_fwd_table(msg_dict) 
+                    self.update_fwd_table(msg_dict) 
+                    # Rebroadcast the message to the neighbors 
+                    #   Update received from a customer: send updates to all other neighbors
+                    #   Update received from a peer or a provider: only send updates to your customers
+                    
+
+                    # new serialized table message to send back
+                    for n in self.fwd_table :
+                        print("XXXX: ", type(n))
+                        print("XXXX", n)
+                        new_msg = json.dumps({"src": msg_dict["src"], 
+                          "dst": self.fwd_table[n],  # CLARIFY: is this supposed to be the destination from the update message or change per each neighbor, n? 
+                          "type": "table", 
+                          "msg": msg_dict["msg"], # the updated message from the original update message 
+                      }).encode('utf-8')
+                        self.send(n, new_msg)
+
                 # if a data message, forward (send) the message to its dest    
                 elif(msg_dict["type"] == "data"):
-                    # in the future this will be where we handle data forwarding logic  
-                    sock.send(msg_dict["dst"]["network"], msg_dict["msg"])    
-                return
+                    # in the future this will be where we handle data forwarding logic 
+                    # if our router hears an update message msg's source is the dst in the fwd table
+                   
+                    # new serialized data message to send 
+                    new_msg = json.dumps({"src": msg_dict["src"], 
+                          "dst": msg_dict["dst"], # the message's new destination is the original message's source 
+                          "type": "data", 
+                          "msg": msg_dict["msg"],
+                      }).encode('utf-8')
+
+                    self.print_table()
+                    self.send(msg_dict["dst"], new_msg)
+                    # self.send("%d.%d.%d.%d" % (quads[0], quads[1], quads[2], quads[3]), msg_dict["msg"])
+
+                # if a dump message, reply with our forwarding table
+                elif(msg_dict["type"] == "dump"):
+
+                    # new serialized table message to send back
+                    new_msg = json.dumps({"src": msg_dict["dst"], 
+                          "dst": msg_dict["src"], # the message's new destination is the original message's source 
+                          "type": "table", 
+                          "msg": self.fwd_table,
+                      }).encode('utf-8')
+                    self.send(msg_dict["src"], new_msg)
+                    
+        return
     
-    def update_fwd_table(update_msg_dict):
-        #do something
-        fwd_table[update_msg_dict["src"]] = update_msg_dict["msg"]
-        print("---updated fwd table---")
+
+# Recieved 
+# 192.168.0.25 
+# To compare >> binary, compare with table in binary + netmask
+
+# Table
+# 192.168.0.1 << 255.255.255.0
+# 172.168.0.1 << 255.255.0.0
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='route packets')
