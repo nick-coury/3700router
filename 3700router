@@ -20,7 +20,7 @@ class Router:
     #               - "ASPath":     "{<nid>, [nid], ...}",          # Examples: [1] or [3, 4] or [1, 4, 3]
     #               - "origin":     "<IGP|EGP|UNK>"            (ip address of destination network , destination network netmask)
     #global FWD_TABLE 
-    global fwd_table
+    fwd_table = {}
 
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
