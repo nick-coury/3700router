@@ -102,7 +102,7 @@ class Router:
                           "type": "table", 
                           "msg": msg_dict["msg"], # the updated message from the original update message 
                       }).encode('utf-8')
-                        self.send(n, new_msg)
+                        self.send(n, new_msg) # why does this have a key value error? How do we actually send the message? 
 
                 # if a data message, forward (send) the message to its dest    
                 elif(msg_dict["type"] == "data"):
