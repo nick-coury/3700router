@@ -41,6 +41,11 @@ class Router:
                 msg = k.decode('utf-8')
 
                 print("Received message '%s' from %s" % (msg, srcif))
+                print("------deserialize-----/n")
+                msg_dict = json.loads(msg)
+                print("msg src: ", msg_dict["src"], "/n")
+                print("msg dst: ", msg_dict["dst"], "/n")
+                print("--------------------/n")
         return
 
 if __name__ == "__main__":
