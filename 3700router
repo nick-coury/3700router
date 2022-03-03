@@ -38,8 +38,10 @@ class Router:
             self.ports[neighbor] = int(port)
             self.relations[neighbor] = relation
 
-            print(type (neighbor))
-            print(neighbor)
+            #print(type (neighbor))
+            print("Router IP", neighbor)
+            print("Sockets", self.sockets)
+            print("Ports", self.ports)
 
             self.send(neighbor, json.dumps({ "type": "handshake", "src": self.our_addr(neighbor), "dst": neighbor, "msg": {}  }))
 
@@ -49,14 +51,14 @@ class Router:
         return "%d.%d.%d.%d" % (quads[0], quads[1], quads[2], quads[3])
 
     def send(self, network, message):
-        print("send method's network: ", network)
-        print("send method's message: ", message)
+        #print("send method's network: ", network)
+        #print("send method's message: ", message)
 
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
 
     def update_fwd_table(self, update_msg_dict):
         #do something
-        self.fwd_table[update_msg_dict["dst"]] = update_msg_dict["msg"]
+        self.fwd_table[update_msg_dict["src"]] = update_msg_dict["msg"]
         print("---updated fwd table---")
         self.print_table()
         
@@ -91,25 +93,49 @@ class Router:
                     # add entry to fwd table
                     self.update_fwd_table(msg_dict)
                     # send copy of announcement to neighbors 
-                    for neighbor in self.sockets :
-                        print("neighbor: ", neighbor," socket: ", self.sockets[neighbor])
-                        #self.send(neighbor)
                      
                     # Rebroadcast the message to the neighbors 
                     #   Update received from a customer: send updates to all other neighbors
                     #   Update received from a peer or a provider: only send updates to your customers
-                    
-
+                
                     # new serialized table message to send back
-                    for n in self.fwd_table :
-                        print("XXXX: ", type(n))
-                        print("XXXX", n)
-                        new_msg = json.dumps({"src": msg_dict["src"], 
-                          "dst": self.fwd_table[n],  # CLARIFY: is this supposed to be the destination from the update message or change per each neighbor, n? 
-                          "type": "table", 
-                          "msg": msg_dict["msg"], # the updated message from the original update message 
-                      }).encode('utf-8')
-                        self.send(n, new_msg) # why does this have a key value error? How do we actually send the message? 
+                    print("BROADCASTING TO NEIGHBORS")
+
+                    extracted_network_msg = msg_dict["msg"]
+                    del extracted_network_msg["origin"]
+                    del extracted_network_msg["selfOrigin"]
+                    del extracted_network_msg["localpref"]
+
+                    # add ourselves to the ASPath 
+                    extracted_network_msg["ASPath"].insert(0, self.asn)
+                    
+                    # print("NEW MESSAGE: " , extracted_network_msg)
+                    new_msg = json.dumps({"src": msg_dict["dst"], 
+                        "dst": msg_dict["src"], # the message's new destination is the original message's source 
+                        "type": "update",     
+                        "msg": extracted_network_msg 
+                    })
+
+                    received_from = "0"
+                    # Obtain the relation from the recieved message
+                    for n in self.sockets:
+                        if n == msg_dict["src"]:
+                            received_from = n
+                            break
+                        if received_from == 0:
+                            raise Exception("No match from received message")
+
+                    # Update received from a customer: send updates to all other neighbors
+                    if(self.relations[received_from] == "CUST"):
+                        for n in self.sockets:
+                            # so we don't send a message back to where it came from
+                            if(n != received_from):
+                                self.send(n, new_msg)
+                    # Update received from a peer or a provider: only send updates to your customers
+                    else:
+                        for n in self.sockets:
+                            if self.relations[n] == "CUST":
+                                self.send(n, new_msg)
 
                 # if a data message, forward (send) the message to its dest    
                 elif(msg_dict["type"] == "data"):
@@ -124,6 +150,7 @@ class Router:
                       }).encode('utf-8')
 
                     self.print_table()
+                    
                     self.send(msg_dict["dst"], new_msg)
                     # self.send("%d.%d.%d.%d" % (quads[0], quads[1], quads[2], quads[3]), msg_dict["msg"])
 
@@ -149,6 +176,10 @@ class Router:
 # 192.168.0.1 << 255.255.255.0
 # 172.168.0.1 << 255.255.0.0
 
+# {'src': '192.168.0.2', 'dst': '192.168.0.1', 'type': 'update', 'msg': {'network': '192.168.0.0', 'netmask': '255.255.255.0', 'ASPath': [1]}}
+# {'msg': {'netmask': '255.255.255.0', 'ASPath': [14, 1], 'network': '192.168.0.0'}, 'src': '172.168.0.1', 'dst': '172.168.0.2', 'type': 'update'}
+
+# {"src": "192.168.0.2", "dst": "192.168.0.1", "type": "update", "msg": {"network": "192.168.0.0", "netmask": "255.255.255.0", "ASPath": [1]}}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='route packets')
