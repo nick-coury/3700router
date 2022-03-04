@@ -1,11 +1,11 @@
 #!/usr/bin/env -S python3 -u
 
-import argparse, socket, time, json, select, struct, sys, math
+import argparse, socket, time, json, select, struct, sys, math, copy
 from concurrent.futures.process import _MAX_WINDOWS_WORKERS
 
 
 class Router:
-    # enum: CUST | PROV | PEER
+    # enum: cust | prov | peer
     relations = {}
 
     # list of UDP sockets 
@@ -38,10 +38,9 @@ class Router:
             self.ports[neighbor] = int(port)
             self.relations[neighbor] = relation
 
-            #print(type (neighbor))
-            print("Router IP", neighbor)
-            print("Sockets", self.sockets)
-            print("Ports", self.ports)
+            # print("Router IP", neighbor)
+            # print("Sockets", self.sockets)
+            # print("Ports", self.ports)
 
             self.send(neighbor, json.dumps({ "type": "handshake", "src": self.our_addr(neighbor), "dst": neighbor, "msg": {}  }))
 
@@ -51,22 +50,124 @@ class Router:
         return "%d.%d.%d.%d" % (quads[0], quads[1], quads[2], quads[3])
 
     def send(self, network, message):
-        #print("send method's network: ", network)
-        #print("send method's message: ", message)
-
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
 
     def update_fwd_table(self, update_msg_dict):
-        #do something
         self.fwd_table[update_msg_dict["src"]] = update_msg_dict["msg"]
-        print("---updated fwd table---")
-        self.print_table()
+
+        # DEBUG
+        # print("---updated fwd table---")
+        # self.print_table()
         
     def print_table(self):    
         print("------TABLE-------")
         print(self.fwd_table)
         print("------------------")
         
+
+    def update(self, msg_dict):
+        # save a copy of the announcement from the neighbor 
+        self.announcements[msg_dict["src"]] = copy.deepcopy(msg_dict)
+        # add entry to fwd table
+        self.update_fwd_table(msg_dict)
+
+        print(self.fwd_table)
+
+        # Remove private info from the message 
+        extracted_network_msg = copy.deepcopy(msg_dict["msg"])
+        del extracted_network_msg["origin"]
+        del extracted_network_msg["selfOrigin"]
+        del extracted_network_msg["localpref"]
+
+        # add ourselves to the ASPath 
+        extracted_network_msg["ASPath"].insert(0, self.asn)
+
+        print(self.fwd_table)
+
+        received_from = "0"
+        # Obtain the relation from the recieved message
+        for n in self.sockets:
+            if n == msg_dict["src"]:
+                received_from = n
+                break
+            if received_from == 0:
+                raise Exception("No match from received message")
+
+        # Update received from a customer: send updates to all other neighbors
+        if(self.relations[received_from] == "cust"):
+            for n in self.sockets:
+                # so we don't send a message back to where it came from
+                if(n != received_from):
+                    new_msg = json.dumps({"src": self.our_addr(n), 
+                    "dst": n, 
+                    "type": "update",     
+                    "msg": extracted_network_msg 
+                    })
+                    self.send(n, new_msg)
+        # Update received from a peer or a provider: only send updates to your customers
+        else:
+            for n in self.sockets:
+                if self.relations[n] == "cust":
+                    new_msg = json.dumps({"src": self.our_addr(n), 
+                    "dst": n, 
+                    "type": "update",     
+                    "msg": extracted_network_msg 
+                    })
+                    self.send(n, new_msg)
+
+    def data(self, msg_dict):
+        # in the future this will be where we handle data forwarding logic 
+        # if our router hears a data message,  source is the dst in the fwd table
+        
+        # new serialized data message to send 
+        new_msg = json.dumps({"src": msg_dict["src"], 
+                "dst": msg_dict["dst"],  
+                "type": "data", 
+                "msg": msg_dict["msg"],
+        })
+        
+        # Select best network
+        no_match = True
+        for n in self.fwd_table:
+            dict_quads = list(int(qdn) for qdn in msg_dict["dst"].split('.'))
+            temp = self.fwd_table[n]
+            fwd_quads = list(int(qdn) for qdn in temp["network"].split('.'))
+            if (dict_quads[0] == fwd_quads[0]):
+                # Send message to network
+                self.send(n, new_msg)
+                no_match = False
+                break
+        if no_match:
+            for n in self.fwd_table:
+                dict_quads_back= list(int(qdn) for qdn in msg_dict["src"].split('.'))
+                temp = self.fwd_table[n]
+                fwd_quads_back = list(int(qdn) for qdn in temp["network"].split('.'))
+                if(dict_quads_back[0] == fwd_quads_back[0]):
+                    new_msg = json.dumps({"src": self.our_addr(n), 
+                    "dst": msg_dict["src"], 
+                    "type": "no route", 
+                    "msg": {},
+                    })
+                    #print("we are sending a no route to: ", n)
+                    self.send(n, new_msg)
+                    break
+
+    def dump(self, msg_dict):
+        # new serialized table message to send back
+        self.print_table()
+        new_msg = []
+        for n in self.fwd_table:
+            new_entry = self.fwd_table[n].copy()
+            new_entry["peer"] = n
+            new_msg.append(new_entry)
+        
+        table_msg = json.dumps({"src": msg_dict["dst"], 
+        "dst": msg_dict["src"], # the message's new destination is the original message's source 
+        "type": "table", 
+        "msg": new_msg,
+        })
+        #print("XXXXXX ", new_msg)
+        self.send(msg_dict["src"], table_msg)
 
     def run(self):
         while True:
@@ -85,85 +186,15 @@ class Router:
                 msg_dict = json.loads(msg)
 
                 # Choose what to do with the received messaged based on the type
-
-                # if an update message
+                # if an update message, copy, add to fwd, send to neighbors
                 if(msg_dict["type"] == "update"):
-                    # save a copy of the announcement from the neighbor 
-                    self.announcements[msg_dict["src"]] = msg_dict.copy()
-                    # add entry to fwd table
-                    self.update_fwd_table(msg_dict)
-                    # send copy of announcement to neighbors 
-                     
-                    # Rebroadcast the message to the neighbors 
-                    #   Update received from a customer: send updates to all other neighbors
-                    #   Update received from a peer or a provider: only send updates to your customers
-                
-                    # new serialized table message to send back
-                    print("BROADCASTING TO NEIGHBORS")
-
-                    extracted_network_msg = msg_dict["msg"]
-                    del extracted_network_msg["origin"]
-                    del extracted_network_msg["selfOrigin"]
-                    del extracted_network_msg["localpref"]
-
-                    # add ourselves to the ASPath 
-                    extracted_network_msg["ASPath"].insert(0, self.asn)
-                    
-                    # print("NEW MESSAGE: " , extracted_network_msg)
-                    new_msg = json.dumps({"src": msg_dict["dst"], 
-                        "dst": msg_dict["src"], # the message's new destination is the original message's source 
-                        "type": "update",     
-                        "msg": extracted_network_msg 
-                    })
-
-                    received_from = "0"
-                    # Obtain the relation from the recieved message
-                    for n in self.sockets:
-                        if n == msg_dict["src"]:
-                            received_from = n
-                            break
-                        if received_from == 0:
-                            raise Exception("No match from received message")
-
-                    # Update received from a customer: send updates to all other neighbors
-                    if(self.relations[received_from] == "CUST"):
-                        for n in self.sockets:
-                            # so we don't send a message back to where it came from
-                            if(n != received_from):
-                                self.send(n, new_msg)
-                    # Update received from a peer or a provider: only send updates to your customers
-                    else:
-                        for n in self.sockets:
-                            if self.relations[n] == "CUST":
-                                self.send(n, new_msg)
-
+                    self.update(msg_dict)
                 # if a data message, forward (send) the message to its dest    
                 elif(msg_dict["type"] == "data"):
-                    # in the future this will be where we handle data forwarding logic 
-                    # if our router hears a data message,  source is the dst in the fwd table
-                   
-                    # new serialized data message to send 
-                    new_msg = json.dumps({"src": msg_dict["src"], 
-                          "dst": msg_dict["dst"], # the message's new destination is the original message's source 
-                          "type": "data", 
-                          "msg": msg_dict["msg"],
-                      }).encode('utf-8')
-
-                    self.print_table()
-                    
-                    self.send(msg_dict["dst"], new_msg)
-                    # self.send("%d.%d.%d.%d" % (quads[0], quads[1], quads[2], quads[3]), msg_dict["msg"])
-
+                    self.data(msg_dict)
                 # if a dump message, reply with our forwarding table
                 elif(msg_dict["type"] == "dump"):
-
-                    # new serialized table message to send back
-                    new_msg = json.dumps({"src": msg_dict["dst"], 
-                          "dst": msg_dict["src"], # the message's new destination is the original message's source 
-                          "type": "table", 
-                          "msg": self.fwd_table,
-                      }).encode('utf-8')
-                    self.send(msg_dict["src"], new_msg)
+                    self.dump(msg_dict)
                     
         return
     
@@ -180,6 +211,16 @@ class Router:
 # {'msg': {'netmask': '255.255.255.0', 'ASPath': [14, 1], 'network': '192.168.0.0'}, 'src': '172.168.0.1', 'dst': '172.168.0.2', 'type': 'update'}
 
 # {"src": "192.168.0.2", "dst": "192.168.0.1", "type": "update", "msg": {"network": "192.168.0.0", "netmask": "255.255.255.0", "ASPath": [1]}}
+
+# From peer 172
+# Expected {'msg': {'netmask': '255.255.255.0', 'ASPath': [14, 1], 'network': '192.168.0.0'}, 'src': '172.168.0.1', 'dst': '172.168.0.2', 'type': 'update'}
+# Recevied {'src': '192.168.0.1', 'dst': '192.168.0.2', 'type': 'update', 'msg': {'network': '192.168.0.0', 'netmask': '255.255.255.0', 'ASPath': [14, 1]}}
+
+# Peer 192.168.0.2 did not receive expected route announcement {'msg': {'netmask': '255.255.0.0', 'ASPath': [14, 2], 'network': '172.168.0.0'}, 'src': '192.168.0.1', 'dst': '192.168.0.2', 'type': 'update'}
+# Peer 192.168.0.2 received unexpected route announcement      {'src': '172.168.0.1', 'dst': '172.168.0.2', 'type': 'update', 'msg': {'network': '172.168.0.0', 'netmask': '255.255.0.0', 'ASPath': [14, 2]}}
+
+# ours: '{'network': '172.168.0.0', 'netmask': '255.255.0.0', 'localpref': 100, 'ASPath': [14, 2], 'origin': 'EGP', 'selfOrigin': True, 'peer': '172.168.0.2'}'
+# want: '{'origin': 'EGP', 'localpref': 100, 'network': '172.168.0.0', 'ASPath': [2], 'netmask': '255.255.0.0', 'peer': '172.168.0.2', 'selfOrigin': True}'
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='route packets')
