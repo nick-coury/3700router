@@ -14,7 +14,7 @@ class Router:
     # list of ports in router, each port has a UDP socket 
     ports = {}
 
-    # forwarding table holds key, value 
+    # forwarding table holds {key : value}
     # key - ip address of source
     # value - dictionary:  
     #               - "network":    "<network prefix>",             # Example: 12.0.0.0
@@ -63,6 +63,39 @@ class Router:
         print("------TABLE-------")
         print(self.fwd_table)
         print("------------------")
+
+    #   1. The entry with the highest localpref wins. If the localprefs are equal
+    #   2. The entry with selfOrigin as true wins. If all selfOrigins are the equal
+    #   3. The entry with the shortest ASPath wins. If multiple entries have the shortest length
+    #   4. The entry with the best origin wins, were IGP > EGP > UNK. If multiple entries have the best origin
+    #   5. The entry from the neighbor router (i.e., the src of the update message) with the lowest IP address
+    def get_best_ip(self, matching_ips):
+        best_ip = list(matching_ips.keys())[0]
+        best_ip_dict = matching_ips[best_ip]
+
+        for curr_ip in matching_ips:
+            curr_ip_dict = matching_ips[curr_ip]
+
+            if(best_ip_dict["localpref"] > curr_ip_dict["localpref"]): 
+                best_ip = curr_ip
+            elif(best_ip_dict["selfOrigin"] == False and curr_ip_dict["selfOrigin"] == True):
+                best_ip = curr_ip
+            elif(best_ip_dict["ASPath"].size() < curr_ip_dict["ASPath"].size()):
+                best_ip = curr_ip            
+            elif((best_ip_dict["origin"] != "IGP" and curr_ip_dict == "IGP") or (best_ip["origin"] == "UNK" and curr_ip["origin"] == "EGP")):
+                best_ip = curr_ip
+            else:
+                best_quads = list(int(qdn) for qdn in best_ip.split('.'))
+                curr_quads = list(int(qdn) for qdn in curr_ip.split('.'))
+                if(best_quads[0] > curr_quads[0]):
+                    best_ip = curr_ip
+                elif(best_quads[1] > curr_quads[1]):
+                    best_ip = curr_ip
+                elif(best_quads[2] > curr_quads[2]):
+                    best_ip = curr_ip
+                elif(best_quads[3] > curr_quads[3]):
+                    best_ip = curr_ip
+        return best_ip
         
 
     def update(self, msg_dict):
@@ -118,6 +151,8 @@ class Router:
     def data(self, msg_dict):
         # in the future this will be where we handle data forwarding logic 
         # if our router hears a data message,  source is the dst in the fwd table
+
+        matching_ips = {}
         
         # new serialized data message to send 
         new_msg = json.dumps({"src": msg_dict["src"], 
@@ -127,6 +162,7 @@ class Router:
         })
         
         # Select best network
+        #   0. Longest prefix match
         no_match = True
         for n in self.fwd_table:
             dict_quads = list(int(qdn) for qdn in msg_dict["dst"].split('.'))
@@ -134,23 +170,29 @@ class Router:
             fwd_quads = list(int(qdn) for qdn in temp["network"].split('.'))
             if (dict_quads[0] == fwd_quads[0]):
                 # Send message to network
-                self.send(n, new_msg)
+                # add the matched network to the list of matching IP's
+                #matching_ips.append(n.value)
+                matching_ips.append({n : self.fwd_table[n]})
+                #self.send(n, new_msg)
                 no_match = False
-                break
-        if no_match:
-            for n in self.fwd_table:
-                dict_quads_back= list(int(qdn) for qdn in msg_dict["src"].split('.'))
-                temp = self.fwd_table[n]
-                fwd_quads_back = list(int(qdn) for qdn in temp["network"].split('.'))
-                if(dict_quads_back[0] == fwd_quads_back[0]):
-                    new_msg = json.dumps({"src": self.our_addr(n), 
-                    "dst": msg_dict["src"], 
-                    "type": "no route", 
-                    "msg": {},
-                    })
-                    #print("we are sending a no route to: ", n)
-                    self.send(n, new_msg)
-                    break
+        if no_match == False:    
+            final_ip = self.get_best_ip(matching_ips)
+            self.send(final_ip, new_msg)
+            
+        # if no_match:
+        #     for n in self.fwd_table:
+        #         dict_quads_back= list(int(qdn) for qdn in msg_dict["src"].split('.'))
+        #         temp = self.fwd_table[n]
+        #         fwd_quads_back = list(int(qdn) for qdn in temp["network"].split('.'))
+        #         if(dict_quads_back[0] == fwd_quads_back[0]):
+        #             new_msg = json.dumps({"src": self.our_addr(n), 
+        #             "dst": msg_dict["src"], 
+        #             "type": "no route", 
+        #             "msg": {},
+        #             })
+        #             #print("we are sending a no route to: ", n)
+        #             self.send(n, new_msg)
+        #             break
 
     def dump(self, msg_dict):
         # new serialized table message to send back
@@ -168,6 +210,7 @@ class Router:
         })
         #print("XXXXXX ", new_msg)
         self.send(msg_dict["src"], table_msg)
+
 
     def run(self):
         while True:
