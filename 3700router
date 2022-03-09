@@ -194,7 +194,7 @@ class Router:
         network_bin = self.to_binary(network)
         netmask_bin = self.to_binary(netmask)
         final = []
-        for i in range(0, 32):
+        for i in len(netmask):
             if network_bin[i] == 1 and netmask_bin[i] == 1:
                 final[i] = 1
             else: 
