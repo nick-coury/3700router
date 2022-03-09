@@ -199,12 +199,12 @@ class Router:
         #print("XXXXXX ", new_msg)
         self.send(msg_dict["src"], table_msg)
 
-    def withdraw (self, msg_dict, srcif):
+    def withdraw(self, msg_dict, srcif):
         # First save a copy of the withdraw message 
         self.revocations.append(copy.deepcopy(msg_dict))
 
         # Next update the forwarding table by removing all networks in the fwd_table inside the msg_dict
-        rmv_list = msg_dict["msg"]
+        rmv_list = copy.deepcopy(msg_dict["msg"])
         for to_remove in rmv_list:
             for n in self.fwd_table:
                 if n["peer"] == msg_dict["src"] and n["netmask"] == to_remove["netmask"] and n["network"] == to_remove["network"]:
@@ -215,21 +215,25 @@ class Router:
             for n in self.sockets:
                 # so we don't send a message back to where it came from
                 if(n != srcif):
-                    new_msg = json.dumps({"src": self.our_addr(n), 
-                    "dst": n, 
-                    "type": "withdraw",     
-                    "msg": msg_dict 
-                    })
+                    print("afdajskfjaslfjkasjl;fjasl;jfklasdj;lkfasjdl;fj;asdlfjkljaskl;fja;skdldjflaskjfsdd")
+                    new_msg = msg_dict
+                    # new_msg = json.dumps({"src": self.our_addr(n), 
+                    # "dst": n, 
+                    # "type": "withdraw",     
+                    # "msg": msg_dict["msg"]
+                    # })
                     self.send(n, new_msg)
         # Revocation received from a peer or a provider: only send updates to your customers
         else:
             for n in self.sockets:
                 if self.relations[n] == "cust":
-                    new_msg = json.dumps({"src": self.our_addr(n), 
-                    "dst": n, 
-                    "type": "witdraw",     
-                    "msg": msg_dict 
-                    })
+                    print("afdajskfjaslfjkasjl;fjasl;jfklasdj;lkfasjdl;fj;asdlfjkljaskl;fja;skdldjflaskjfsdd")
+                    # new_msg = json.dumps({"src": self.our_addr(n), 
+                    # "dst": n, 
+                    # "type": "witdraw",     
+                    # "msg": msg_dict["msg"]
+                    # })
+                    new_msg = msg_dict
                     self.send(n, new_msg)            
 
     def run(self):
