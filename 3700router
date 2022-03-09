@@ -160,7 +160,7 @@ class Router:
         no_match = True
         for n in self.fwd_table:
             dict_quads = list(int(qdn) for qdn in msg_dict["dst"].split('.'))
-            temp = n #self.fwd_table[n]
+            temp = n
             fwd_quads = list(int(qdn) for qdn in temp["network"].split('.'))
             if (dict_quads[0] == fwd_quads[0]):
                 # Send message to network
@@ -175,20 +175,22 @@ class Router:
                 self.send(final_ip, new_msg)
         
             
-        # if no_match:
-        #     for n in self.fwd_table:
-        #         dict_quads_back= list(int(qdn) for qdn in msg_dict["src"].split('.'))
-        #         temp = self.fwd_table[n]
-        #         fwd_quads_back = list(int(qdn) for qdn in temp["network"].split('.'))
-        #         if(dict_quads_back[0] == fwd_quads_back[0]):
-        #             new_msg = json.dumps({"src": self.our_addr(n), 
-        #             "dst": msg_dict["src"], 
-        #             "type": "no route", 
-        #             "msg": {},
-        #             })
-        #             #print("we are sending a no route to: ", n)
-        #             self.send(n, new_msg)
-        #             break
+        if no_match:
+            # for n in self.fwd_table:
+            #     dict_quads_back= list(int(qdn) for qdn in msg_dict["src"].split('.'))
+            #     temp = n #self.fwd_table[n]
+            #     fwd_quads_back = list(int(qdn) for qdn in temp["network"].split('.'))
+            #     if(dict_quads_back[0] == fwd_quads_back[0]):
+            #         matching_ips.append(n)
+
+            # final_ip = self.get_best_ip(matching_ips)
+            new_msg = json.dumps({"src": self.our_addr(srcif), 
+            "dst": msg_dict["src"], 
+            "type": "no route", 
+            "msg": {},
+            })
+            #print("we are sending a no route to: ", n)
+            self.send(srcif, new_msg)
 
     def dump(self, msg_dict):
         table_msg = json.dumps({"src": msg_dict["dst"], 
@@ -215,8 +217,6 @@ class Router:
             for n in self.sockets:
                 # so we don't send a message back to where it came from
                 if(n != srcif):
-                    print("afdajskfjaslfjkasjl;fjasl;jfklasdj;lkfasjdl;fj;asdlfjkljaskl;fja;skdldjflaskjfsdd")
-                    #new_msg = msg_dict
                     new_msg = json.dumps({"src": self.our_addr(n), 
                     "dst": n, 
                     "type": "withdraw",     
@@ -227,13 +227,11 @@ class Router:
         else:
             for n in self.sockets:
                 if self.relations[n] == "cust":
-                    print("afdajskfjaslfjkasjl;fjasl;jfklasdj;lkfasjdl;fj;asdlfjkljaskl;fja;skdldjflaskjfsdd")
                     new_msg = json.dumps({"src": self.our_addr(n), 
                     "dst": n, 
                     "type": "witdraw",     
                     "msg": msg_dict["msg"]
                     })
-                    # new_msg = msg_dict
                     self.send(n, new_msg)            
 
     def run(self):
