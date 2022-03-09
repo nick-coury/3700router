@@ -184,6 +184,7 @@ class Router:
             #         matching_ips.append(n)
 
             # final_ip = self.get_best_ip(matching_ips)
+            print("-----------------NOMATCH------------------------------")
             new_msg = json.dumps({"src": self.our_addr(srcif), 
             "dst": msg_dict["src"], 
             "type": "no route", 
@@ -219,7 +220,7 @@ class Router:
                 if(n != srcif):
                     new_msg = json.dumps({"src": self.our_addr(n), 
                     "dst": n, 
-                    "type": "withdraw",     
+                    "type": "withdraw",
                     "msg": msg_dict["msg"]
                     })
                     self.send(n, new_msg)
@@ -232,7 +233,7 @@ class Router:
                     "type": "witdraw",     
                     "msg": msg_dict["msg"]
                     })
-                    self.send(n, new_msg)            
+                    self.send(n, new_msg)
 
     def run(self):
         while True:
