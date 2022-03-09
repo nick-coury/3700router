@@ -2,6 +2,7 @@
 
 import argparse, socket, time, json, select, struct, sys, math, copy
 from concurrent.futures.process import _MAX_WINDOWS_WORKERS
+from tkinter.tix import INTEGER
 
 
 class Router:
@@ -161,6 +162,69 @@ class Router:
 
         #self.print_table()
 
+    # network comes in as [XXXX.XXXX.XXXX.XXXX] -> 10101010101010101010 <- 4 quads worth of binary in str form
+    def to_binary(self, network):
+        str_bin_network = ""
+        quads = list(int(qdn) for qdn in network.split('.'))
+
+        # Transform each quad into binary
+        first_quad = str(bin(quads[0])).zfill(8)
+        second_quad = str(bin(quads[1])).zfill(8)
+        third_quad = str(bin(quads[2])).zfill(8)
+        fourth_quad = str(bin(quads[3])).zfill(8)
+
+        str_bin_network = first_quad + second_quad + third_quad + fourth_quad
+
+        print (str_bin_network, "----------------------------------------------------")
+
+        return str_bin_network
+        
+    
+    # Given a string binary netmask, return the number of 1's in the list
+    # returns the /X number in CIDR addresses 
+    def get_netmask_int(self, netmask):
+        ones = 0
+        for bit in netmask:
+            if bit == "1":
+                ones += 1
+        return ones
+    
+    # network comes in as [123.123.123.123] [255.255.0.0] -> [bin bin 0 0] (netmasked ip)
+    def netmask_this(self, network, netmask): 
+        network_bin = self.to_binary(network)
+        netmask_bin = self.to_binary(netmask)
+        final = []
+        for i in range(32):
+            if network_bin[i] == 1 and netmask_bin[i] == 1:
+                final[i] = 1
+            else: 
+                final[i] = 0
+        return final
+
+    # print(str(10).zfill(4))
+    # Expected output: "0010"
+
+    # Takes in a destination ip and returns a list of ALL matching ips with the longest matching prefix
+    def longest_prefix_match(self, dst):
+        # loop through the fwd table 
+        #   if dest corresponds to current fwd table entry's network + netmask
+        #       find the longest prefix
+        #       if shorter than longest prefix -> don't add to list
+        #       if equal to longest prefix -> add to list
+        #       if longer than longest prefix -> drop current list, start new one
+        matching_ips = []
+        longest_prefix_length = 0
+        for n in self.fwd_table:
+            netmask_len = self.get_netmask_int(n["netmask"])
+            if self.netmask_this(dst)[0:netmask_len] == self.netmask_this(n["network"])[0:netmask_len]:
+                if netmask_len == longest_prefix_length:
+                    matching_ips.append(copy.deepcopy(n))
+                elif netmask_len > longest_prefix_length:
+                    longest_prefix_length = netmask_len
+                    matching_ips = []
+                    matching_ips.append(copy.deepcopy(n))
+        return matching_ips
+
     def data(self, msg_dict, srcif):
         # in the future this will be where we handle data forwarding logic 
         # if our router hears a data message,  source is the dst in the fwd table
@@ -177,25 +241,24 @@ class Router:
         # Select best network
         #   0. Longest prefix match
         #self.print_table()
-        no_match = True
-        for n in self.fwd_table:
-            dict_quads = list(int(qdn) for qdn in msg_dict["dst"].split('.'))
-            temp = n
-            fwd_quads = list(int(qdn) for qdn in temp["network"].split('.'))
-            if (dict_quads[0] == fwd_quads[0]):
-                # Send message to network
-                # add the matched network to the list of matching IP's
-                matching_ips.append(n) # = self.fwd_table[n]
-                no_match = False
-        # if no match and legal to forward then send         
-        if no_match == False :    
+        # no_match = True
+        # for n in self.fwd_table:
+        #     dict_quads = list(int(qdn) for qdn in msg_dict["dst"].split('.'))
+        #     temp = n
+        #     fwd_quads = list(int(qdn) for qdn in temp["network"].split('.'))
+        #     if (dict_quads[0] == fwd_quads[0]):
+        #         # Send message to network
+        #         # add the matched network to the list of matching IP's
+        #         matching_ips.append(n) # = self.fwd_table[n]
+        #         no_match = False
+        # # if no match and legal to forward then send         
+        matching_ips = self.longest_prefix_match(msg_dict["dst"])
+        if len(matching_ips) != 0:  
             final_ip = self.get_best_ip(matching_ips)
 
             if ((self.relations[srcif] == "cust") or (self.relations[final_ip] == "cust")) :
                 self.send(final_ip, new_msg)
-        
-            
-        if no_match:
+        else:
             # for n in self.fwd_table:
             #     dict_quads_back= list(int(qdn) for qdn in msg_dict["src"].split('.'))
             #     temp = n #self.fwd_table[n]
@@ -204,7 +267,7 @@ class Router:
             #         matching_ips.append(n)
 
             # final_ip = self.get_best_ip(matching_ips)
-            print("-----------------NOMATCH------------------------------")
+            #print("-----------------NOMATCH------------------------------")
             new_msg = json.dumps({"src": self.our_addr(srcif), 
             "dst": msg_dict["src"], 
             "type": "no route", 
