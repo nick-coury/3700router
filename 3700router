@@ -14,7 +14,7 @@ class Router:
     # list of ports in router, each port has a UDP socket 
     ports = {}
 
-    # forwarding table holds {key : value}
+    # forwarding table holds an array of dictionaries {key : value}
     # key - ip address of source
     # value - dictionary:  
     #               - "network":    "<network prefix>",             # Example: 12.0.0.0
@@ -23,10 +23,13 @@ class Router:
     #               - "selfOrigin": "<true|false>",
     #               - "ASPath":     "{<nid>, [nid], ...}",          # Examples: [1] or [3, 4] or [1, 4, 3]
     #               - "origin":     "<IGP|EGP|UNK>"            (ip address of destination network , destination network netmask)
-    fwd_table = {}
+    fwd_table = []
 
     # list of update messages received by the router 
-    announcements = {}
+    announcements = []
+
+    # list of withdraw messages
+    revocations = []
 
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
@@ -53,7 +56,8 @@ class Router:
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
 
     def update_fwd_table(self, update_msg_dict):
-        self.fwd_table[update_msg_dict["src"]] = update_msg_dict["msg"]
+        self.fwd_table.append(update_msg_dict)
+        #[update_msg_dict["src"]] = update_msg_dict["msg"]
 
         # DEBUG
         # print("---updated fwd table---")
@@ -70,41 +74,33 @@ class Router:
     #   4. The entry with the best origin wins, were IGP > EGP > UNK. If multiple entries have the best origin
     #   5. The entry from the neighbor router (i.e., the src of the update message) with the lowest IP address
     def get_best_ip(self, matching_ips):
-        best_ip = list(matching_ips.keys())[0]
-        best_ip_dict = matching_ips[best_ip]
+        best_ip_dict = matching_ips[0]
+        best_ip = best_ip_dict["peer"]
 
-        for curr_ip in matching_ips:
-            curr_ip_dict = matching_ips[curr_ip]
+        for curr_ip_dict in matching_ips:
+            curr_ip = curr_ip_dict["peer"]
 
-            if(best_ip_dict["localpref"] > curr_ip_dict["localpref"]): 
+            if(best_ip_dict["localpref"] < curr_ip_dict["localpref"]): 
                 best_ip = curr_ip
             elif(best_ip_dict["selfOrigin"] == False and curr_ip_dict["selfOrigin"] == True):
+                #print("----- self origin -------")
                 best_ip = curr_ip
-            elif(best_ip_dict["ASPath"].size() < curr_ip_dict["ASPath"].size()):
+            elif(len(best_ip_dict["ASPath"]) > len(curr_ip_dict["ASPath"])):
                 best_ip = curr_ip            
-            elif((best_ip_dict["origin"] != "IGP" and curr_ip_dict == "IGP") or (best_ip["origin"] == "UNK" and curr_ip["origin"] == "EGP")):
+            elif((best_ip_dict["origin"] != "IGP" and curr_ip_dict == "IGP") or (best_ip_dict["origin"] == "UNK" and curr_ip_dict["origin"] == "EGP")):
                 best_ip = curr_ip
-            else:
-                best_quads = list(int(qdn) for qdn in best_ip.split('.'))
-                curr_quads = list(int(qdn) for qdn in curr_ip.split('.'))
-                if(best_quads[0] > curr_quads[0]):
-                    best_ip = curr_ip
-                elif(best_quads[1] > curr_quads[1]):
-                    best_ip = curr_ip
-                elif(best_quads[2] > curr_quads[2]):
-                    best_ip = curr_ip
-                elif(best_quads[3] > curr_quads[3]):
-                    best_ip = curr_ip
+            elif(best_ip > curr_ip):
+                best_ip = curr_ip
         return best_ip
         
 
-    def update(self, msg_dict):
+    def update(self, msg_dict, srcif):
         # save a copy of the announcement from the neighbor 
-        self.announcements[msg_dict["src"]] = copy.deepcopy(msg_dict)
+        self.announcements.append(copy.deepcopy(msg_dict))
         # add entry to fwd table
-        self.update_fwd_table(msg_dict)
-
-        print(self.fwd_table)
+        new_entry = copy.deepcopy(msg_dict["msg"])
+        new_entry["peer"] = msg_dict["src"]
+        self.fwd_table.append(new_entry)
 
         # Remove private info from the message 
         extracted_network_msg = copy.deepcopy(msg_dict["msg"])
@@ -115,22 +111,20 @@ class Router:
         # add ourselves to the ASPath 
         extracted_network_msg["ASPath"].insert(0, self.asn)
 
-        print(self.fwd_table)
-
-        received_from = "0"
-        # Obtain the relation from the recieved message
-        for n in self.sockets:
-            if n == msg_dict["src"]:
-                received_from = n
-                break
-            if received_from == 0:
-                raise Exception("No match from received message")
+        # received_from = "0"
+        # # Obtain the relation from the recieved message
+        # for n in self.sockets:
+        #     if n == msg_dict["src"]:
+        #         received_from = n
+        #         break
+        #     if received_from == 0:
+        #         raise Exception("No match from received message")
 
         # Update received from a customer: send updates to all other neighbors
-        if(self.relations[received_from] == "cust"):
+        if(self.relations[srcif] == "cust"):
             for n in self.sockets:
                 # so we don't send a message back to where it came from
-                if(n != received_from):
+                if(n != srcif):
                     new_msg = json.dumps({"src": self.our_addr(n), 
                     "dst": n, 
                     "type": "update",     
@@ -148,11 +142,11 @@ class Router:
                     })
                     self.send(n, new_msg)
 
-    def data(self, msg_dict):
+    def data(self, msg_dict, srcif):
         # in the future this will be where we handle data forwarding logic 
         # if our router hears a data message,  source is the dst in the fwd table
 
-        matching_ips = {}
+        matching_ips = []
         
         # new serialized data message to send 
         new_msg = json.dumps({"src": msg_dict["src"], 
@@ -166,18 +160,20 @@ class Router:
         no_match = True
         for n in self.fwd_table:
             dict_quads = list(int(qdn) for qdn in msg_dict["dst"].split('.'))
-            temp = self.fwd_table[n]
+            temp = n #self.fwd_table[n]
             fwd_quads = list(int(qdn) for qdn in temp["network"].split('.'))
             if (dict_quads[0] == fwd_quads[0]):
                 # Send message to network
                 # add the matched network to the list of matching IP's
-                #matching_ips.append(n.value)
-                matching_ips.append({n : self.fwd_table[n]})
-                #self.send(n, new_msg)
+                matching_ips.append(n) # = self.fwd_table[n]
                 no_match = False
-        if no_match == False:    
+        # if no match and legal to forward then send         
+        if no_match == False :    
             final_ip = self.get_best_ip(matching_ips)
-            self.send(final_ip, new_msg)
+
+            if ((self.relations[srcif] == "cust") or (self.relations[final_ip] == "cust")) :
+                self.send(final_ip, new_msg)
+        
             
         # if no_match:
         #     for n in self.fwd_table:
@@ -195,22 +191,46 @@ class Router:
         #             break
 
     def dump(self, msg_dict):
-        # new serialized table message to send back
-        self.print_table()
-        new_msg = []
-        for n in self.fwd_table:
-            new_entry = self.fwd_table[n].copy()
-            new_entry["peer"] = n
-            new_msg.append(new_entry)
-        
         table_msg = json.dumps({"src": msg_dict["dst"], 
         "dst": msg_dict["src"], # the message's new destination is the original message's source 
         "type": "table", 
-        "msg": new_msg,
+        "msg": self.fwd_table,
         })
         #print("XXXXXX ", new_msg)
         self.send(msg_dict["src"], table_msg)
 
+    def withdraw (self, msg_dict, srcif):
+        # First save a copy of the withdraw message 
+        self.revocations.append(copy.deepcopy(msg_dict))
+
+        # Next update the forwarding table by removing all networks in the fwd_table inside the msg_dict
+        rmv_list = msg_dict["msg"]
+        for to_remove in rmv_list:
+            for n in self.fwd_table:
+                if n["peer"] == msg_dict["src"] and n["netmask"] == to_remove["netmask"] and n["network"] == to_remove["network"]:
+                    self.fwd_table.remove(n)
+
+        # Revocation received from a customer: send updates to all other neighbors
+        if(self.relations[srcif] == "cust"):
+            for n in self.sockets:
+                # so we don't send a message back to where it came from
+                if(n != srcif):
+                    new_msg = json.dumps({"src": self.our_addr(n), 
+                    "dst": n, 
+                    "type": "withdraw",     
+                    "msg": msg_dict 
+                    })
+                    self.send(n, new_msg)
+        # Revocation received from a peer or a provider: only send updates to your customers
+        else:
+            for n in self.sockets:
+                if self.relations[n] == "cust":
+                    new_msg = json.dumps({"src": self.our_addr(n), 
+                    "dst": n, 
+                    "type": "witdraw",     
+                    "msg": msg_dict 
+                    })
+                    self.send(n, new_msg)            
 
     def run(self):
         while True:
@@ -231,15 +251,15 @@ class Router:
                 # Choose what to do with the received messaged based on the type
                 # if an update message, copy, add to fwd, send to neighbors
                 if(msg_dict["type"] == "update"):
-                    self.update(msg_dict)
+                    self.update(msg_dict, srcif)
                 # if a data message, forward (send) the message to its dest    
                 elif(msg_dict["type"] == "data"):
-                    self.data(msg_dict)
+                    self.data(msg_dict, srcif)
                 # if a dump message, reply with our forwarding table
                 elif(msg_dict["type"] == "dump"):
                     self.dump(msg_dict)
-                    
-        return
+                elif(msg_dict["type"] == "withdraw"):
+                    self.withdraw(msg_dict, srcif)             
     
 
 # Recieved 
