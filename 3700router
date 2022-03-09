@@ -60,8 +60,8 @@ class Router:
         #[update_msg_dict["src"]] = update_msg_dict["msg"]
 
         # DEBUG
-        # print("---updated fwd table---")
-        # self.print_table()
+        #print("---updated fwd table---")
+        self.print_table()
         
     def print_table(self):    
         print("------TABLE-------")
@@ -192,6 +192,7 @@ class Router:
             })
             #print("we are sending a no route to: ", n)
             self.send(srcif, new_msg)
+        
 
     def dump(self, msg_dict):
         table_msg = json.dumps({"src": msg_dict["dst"], 
