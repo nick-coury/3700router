@@ -216,23 +216,23 @@ class Router:
                 # so we don't send a message back to where it came from
                 if(n != srcif):
                     print("afdajskfjaslfjkasjl;fjasl;jfklasdj;lkfasjdl;fj;asdlfjkljaskl;fja;skdldjflaskjfsdd")
-                    new_msg = msg_dict
-                    # new_msg = json.dumps({"src": self.our_addr(n), 
-                    # "dst": n, 
-                    # "type": "withdraw",     
-                    # "msg": msg_dict["msg"]
-                    # })
+                    #new_msg = msg_dict
+                    new_msg = json.dumps({"src": self.our_addr(n), 
+                    "dst": n, 
+                    "type": "withdraw",     
+                    "msg": msg_dict["msg"]
+                    })
                     self.send(n, new_msg)
         # Revocation received from a peer or a provider: only send updates to your customers
         else:
             for n in self.sockets:
                 if self.relations[n] == "cust":
                     print("afdajskfjaslfjkasjl;fjasl;jfklasdj;lkfasjdl;fj;asdlfjkljaskl;fja;skdldjflaskjfsdd")
-                    # new_msg = json.dumps({"src": self.our_addr(n), 
-                    # "dst": n, 
-                    # "type": "witdraw",     
-                    # "msg": msg_dict["msg"]
-                    # })
+                    new_msg = json.dumps({"src": self.our_addr(n), 
+                    "dst": n, 
+                    "type": "witdraw",     
+                    "msg": msg_dict["msg"]
+                    })
                     new_msg = msg_dict
                     self.send(n, new_msg)            
 
