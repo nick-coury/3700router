@@ -216,7 +216,7 @@ class Router:
         longest_prefix_length = 0
         for n in self.fwd_table:
             netmask_len = self.get_netmask_int(n["netmask"])
-            if self.netmask_this(dst)[0:netmask_len] == self.netmask_this(n["network"])[0:netmask_len]:
+            if self.netmask_this(dst, n["netmask"])[0:netmask_len] == self.netmask_this(n["network"], n["netmask"])[0:netmask_len]:
                 if netmask_len == longest_prefix_length:
                     matching_ips.append(copy.deepcopy(n))
                 elif netmask_len > longest_prefix_length:
