@@ -80,15 +80,32 @@ class Router:
         for curr_ip_dict in matching_ips:
             curr_ip = curr_ip_dict["peer"]
 
+            # check which aspect is better, only move on if they're both equal 
+            # check the local prefs of the two messages 
             if(best_ip_dict["localpref"] < curr_ip_dict["localpref"]): 
                 best_ip = curr_ip
-            elif(best_ip_dict["selfOrigin"] == False and curr_ip_dict["selfOrigin"] == True):
-                #print("----- self origin -------")
+            elif(best_ip_dict["localpref"] > curr_ip_dict["localpref"]): 
+                best_ip = best_ip
+            
+            # check the self origins of both messages 
+            elif(best_ip_dict["selfOrigin"] == False and curr_ip_dict["selfOrigin"] == True): # make sure 1: true 2: false 
                 best_ip = curr_ip
+            elif(best_ip_dict["selfOrigin"] == True and curr_ip_dict["selfOrigin"] == False): # make sure 1: false 2: true 
+                best_ip = best_ip
+            
+            # check the aspaths of both messages 
             elif(len(best_ip_dict["ASPath"]) > len(curr_ip_dict["ASPath"])):
-                best_ip = curr_ip            
+                best_ip = curr_ip    
+            elif(len(best_ip_dict["ASPath"]) < len(curr_ip_dict["ASPath"])):
+                best_ip = best_ip  
+            
+            # check they do not have the same origin and make sure the 
             elif((best_ip_dict["origin"] != "IGP" and curr_ip_dict == "IGP") or (best_ip_dict["origin"] == "UNK" and curr_ip_dict["origin"] == "EGP")):
                 best_ip = curr_ip
+            elif((curr_ip_dict["origin"] != "IGP" and best_ip_dict == "IGP") or (curr_ip_dict["origin"] == "UNK" and curr_ip_dict["origin"] == "EGP")):
+                best_ip = best_ip
+            
+            # catch all, if equal, send the global best ip (should never happen)
             elif(best_ip > curr_ip):
                 best_ip = curr_ip
         return best_ip
@@ -142,7 +159,7 @@ class Router:
                     })
                     self.send(n, new_msg)
 
-        self.print_table()
+        #self.print_table()
 
     def data(self, msg_dict, srcif):
         # in the future this will be where we handle data forwarding logic 
@@ -159,7 +176,7 @@ class Router:
         
         # Select best network
         #   0. Longest prefix match
-        self.print_table()
+        #self.print_table()
         no_match = True
         for n in self.fwd_table:
             dict_quads = list(int(qdn) for qdn in msg_dict["dst"].split('.'))
