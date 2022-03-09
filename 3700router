@@ -233,7 +233,7 @@ class Router:
                     "type": "witdraw",     
                     "msg": msg_dict["msg"]
                     })
-                    new_msg = msg_dict
+                    # new_msg = msg_dict
                     self.send(n, new_msg)            
 
     def run(self):
