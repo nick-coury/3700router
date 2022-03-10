@@ -153,8 +153,7 @@ class Router:
         else: 
             return True   
 
-    
-    # Given a b
+    # Given a binary octet, turns into a decimal number
     def binary_to_decimal(self, octet):
         bin_array = []
         for i in range(len(octet)):
@@ -179,28 +178,28 @@ class Router:
                 bin_cidr1 += "1"
             else:
                 bin_cidr1 += "0"
-        octet1 = self.binary_to_decimal(int(bin_cidr1))
+        octet1 = self.binary_to_decimal(bin_cidr1)
 
         for i in range(8, 16):
             if(i < len):
                 bin_cidr2 += "1"
             else:
                 bin_cidr2 += "0"
-        octet2 = self.binary_to_decimal(int(bin_cidr2))
+        octet2 = self.binary_to_decimal(bin_cidr2)
         
         for i in range(16, 24):
             if(i < len):
                 bin_cidr3 += "1"
             else:
                 bin_cidr3 += "0"
-        octet3 = self.binary_to_decimal(int(bin_cidr3))
+        octet3 = self.binary_to_decimal(bin_cidr3)
 
         for i in range(24, 32):
             if(i < len):
                 bin_cidr4 += "1"
             else:
                 bin_cidr4 += "0"
-        octet4 = self.binary_to_decimal(int(bin_cidr4))
+        octet4 = self.binary_to_decimal(bin_cidr4)
         
         return str(octet1) + "." + str(octet2) + "." + str(octet3) + "." + str(octet4)
 
