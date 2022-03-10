@@ -198,12 +198,17 @@ class Router:
     def netmask_this(self, network, netmask): 
         network_bin = self.to_binary(network)
         netmask_bin = self.to_binary(netmask)
+
+        print("network_bin: ", network_bin)
+        print("netmask_bin: ", netmask_bin)
         final = ""
         for i in range(32):
-            if network_bin[i] == 1 and netmask_bin[i] == 1:
+            if network_bin[i:i] == 1 and netmask_bin[i:i] == 1:
                 final += "1"
             else: 
                 final += "0"
+
+        print("final_bin: ", final)        
         return final
 
     # print(str(10).zfill(4))
