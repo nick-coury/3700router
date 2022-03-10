@@ -180,21 +180,21 @@ class Router:
                 bin_cidr1 += "0"
         octet1 = self.binary_to_decimal(int(bin_cidr1))
 
-        for i in range(9, 16):
+        for i in range(8, 16):
             if(i < len):
                 bin_cidr2 += "1"
             else:
                 bin_cidr2 += "0"
         octet2 = self.binary_to_decimal(int(bin_cidr2))
         
-        for i in range(17, 24):
+        for i in range(16, 24):
             if(i < len):
                 bin_cidr3 += "1"
             else:
                 bin_cidr3 += "0"
         octet3 = self.binary_to_decimal(int(bin_cidr3))
 
-        for i in range(25, 32):
+        for i in range(24, 32):
             if(i < len):
                 bin_cidr4 += "1"
             else:
