@@ -216,7 +216,7 @@ class Router:
                     if(self.all_else_same(curr_entry, compare_entry)):
                         print("!!!!!!!!!!!!!!!!!!!YAY!!!!!!!!!!!!!!!!!!")
                         # calculate the new netmask length (old netmask len - 1)
-                        new_netmask_len = self.get_cidr_len(compare_entry["netmask"]) - 1
+                        new_netmask_len = self.get_cidr_len(self.to_binary(compare_entry["netmask"])) - 1
                         # generate a new netmask based on the new netmask length
                         new_netmask = self.make_netmask(new_netmask_len)
                         # save off the current entry's netmask
@@ -265,7 +265,8 @@ class Router:
     # returns the /X number in CIDR addresses 
     def get_cidr_len(self, netmask):
         ones = 0
-        print("netmask: ", netmask)
+        #print("netmask: ", netmask)
+        #self.to_binary(netmask)
         for i in range(32):
             if netmask[i] == "1":
                 ones += 1
