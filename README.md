@@ -6,7 +6,7 @@
 
 We were asked to write the code to emulate a BGP Router. BGP routers are similar to network bridges in the way that they both have forwarding tables and they receive and send messages. One big difference between routers and bridges is that routers need to aggregate their forwarding table. 
 
-### Overall Requirements 
+1.2 Overall Requirements 
 - Accept route update messages from the BGP neighbors, and forward updates as appropriate
 - Accept route revocation messages from the BGP neighbors, and forward revocations as appropriate
 - Forward data packets towards their correct destination
