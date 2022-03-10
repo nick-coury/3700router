@@ -189,9 +189,12 @@ class Router:
     # returns the /X number in CIDR addresses 
     def get_cidr_len(self, netmask):
         ones = 0
-        for bit in netmask:
-            if bit == "1":
+        for i in range(32):
+            if netmask[i] == "1":
                 ones += 1
+        # for bit in netmask:
+        #     if bit == "1":
+        #         ones += 1
         return ones
     
     # network comes in as [123.123.123.123] [255.255.0.0] -> [bin bin 0 0] (netmasked ip)
@@ -199,8 +202,8 @@ class Router:
         network_bin = self.to_binary(network)
         netmask_bin = self.to_binary(netmask)
 
-        print("XXXXX network_bin: ", network_bin)
-        print("XXXXX netmask_bin: ", netmask_bin)
+        #print("XXXXX network_bin: ", network_bin)
+        #print("XXXXX netmask_bin: ", netmask_bin)
         final = ""
         for i in range(32):
             if network_bin[i] == "1" and netmask_bin[i] == "1":
@@ -208,7 +211,7 @@ class Router:
             else: 
                 final += "0"
 
-        print("final_bin: ", final) 
+        #print("final_bin: ", final) 
         return final
 
     # print(str(10).zfill(4))
