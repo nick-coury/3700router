@@ -203,7 +203,7 @@ class Router:
         print("netmask_bin: ", netmask_bin)
         final = ""
         for i in range(32):
-            if network_bin[i:i] == 1 and netmask_bin[i:i] == 1:
+            if network_bin[i:i+1] == 1 and netmask_bin[i:i+1] == 1:
                 final += "1"
             else: 
                 final += "0"
