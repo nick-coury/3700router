@@ -142,13 +142,13 @@ class Router:
             return False 
         elif n1["selfOrigin"] != n2["selfOrigin"]:
             return False 
-        elif n1["localpref"] != n2["localpref"]:
-            return False
         elif n1["ASPath"] != n2["ASPath"]:
             return False
         elif n1["origin"] != n2["origin"]:
             return False
         elif n1["netmask"] != n2["netmask"]:
+            return False
+        elif n1["peer"] != n2["peer"]:
             return False
         else: 
             return True   
@@ -224,7 +224,7 @@ class Router:
                         compare_cidr_addr = self.netmask_this(compare_entry["network"], new_netmask)
                         
                         # If the netmasks are the same (and everything else is too)
-                        if(curr_cidr_addr[0:new_netmask_len] == compare_cidr_addr[0:new_netmask_len]):
+                        if(curr_cidr_addr == compare_cidr_addr):
                             # if you aggregate, remove the entry with the larger network ip
                             if(curr_entry["network"] < compare_entry["network"]):
                                 self.fwd_table.remove(compare_entry)
@@ -297,7 +297,7 @@ class Router:
         for n in self.fwd_table:
             cidr_len = self.get_cidr_len(self.to_binary(n["netmask"]))
 
-            if self.netmask_this(dst, n["netmask"])[0:cidr_len] == self.netmask_this(n["network"], n["netmask"])[0:cidr_len]:
+            if self.netmask_this(dst, n["netmask"]) == self.netmask_this(n["network"], n["netmask"]):
                 if cidr_len == longest_prefix_length:
                     matching_ips.append(copy.deepcopy(n))
                 elif cidr_len > longest_prefix_length:
