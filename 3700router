@@ -163,7 +163,6 @@ class Router:
             decimal = decimal + dec * pow(2, i)
             binary = binary//10
             i += 1
-        print("DECIMAL: ", decimal)
         return (decimal)
 
     # takes in a netmask length -> convert to the binary version -> convert to decimal netmask address 
@@ -213,9 +212,7 @@ class Router:
         for curr_entry in self.fwd_table:
             for compare_entry in self.fwd_table:
                 if(curr_entry != compare_entry):
-                    print("all else same between: ", curr_entry, " and ", compare_entry)
                     if(self.all_else_same(curr_entry, compare_entry)):
-                        print("!!!!!!!!!!!!!!!!!!!YAY!!!!!!!!!!!!!!!!!!")
                         # calculate the new netmask length (old netmask len - 1)
                         new_netmask_len = self.get_cidr_len(self.to_binary(compare_entry["netmask"])) - 1
                         # generate a new netmask based on the new netmask length
@@ -350,18 +347,32 @@ class Router:
         })
         self.send(msg_dict["src"], table_msg)
 
-    # Logic for handling withdraw messages
-    def withdraw(self, msg_dict, srcif):
-        # First save a copy of the withdraw message 
-        self.revocations.append(copy.deepcopy(msg_dict))
+    def reset_fwd_table(self):
+        self.fwd_table = []
+        for msg in self.announcements:
+            self.update(msg)
+        for msg in self.revocations :
+            self.remove_from_fwd_table(msg) 
+        self.aggregate()       
 
-        # Next update the forwarding table by removing all networks in the fwd_table inside the msg_dict
+    # Remove an entry from the fwd table given a withdraw message
+    def remove_from_fwd_table(self, msg_dict):
         rmv_list = copy.deepcopy(msg_dict["msg"])
-
         for to_remove in rmv_list:
             for n in self.fwd_table:
                 if n["peer"] == msg_dict["src"] and n["netmask"] == to_remove["netmask"] and n["network"] == to_remove["network"]:
                     self.fwd_table.remove(n)
+                    return True
+        return False
+
+
+    # Logic for handling withdraw messages
+    def withdraw(self, msg_dict, srcif):
+        # First save a copy of the withdraw message 
+        self.revocations.append(copy.deepcopy(msg_dict))
+        
+        if not self.remove_from_fwd_table(msg_dict):
+            self.reset_fwd_table()
 
         # Revocation received from a customer: send updates to all other neighbors
         if(self.relations[srcif] == "cust"):
