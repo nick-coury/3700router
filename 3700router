@@ -189,6 +189,10 @@ class Router:
     # returns the /X number in CIDR addresses 
     def get_cidr_len(self, netmask):
         ones = 0
+        print("**********")
+        print("netmask: ", netmask)
+        print("netmask length: ",len(netmask))
+        print("**********")
         for i in range(32):
             if netmask[i] == "1":
                 ones += 1
