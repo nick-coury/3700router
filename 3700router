@@ -153,17 +153,19 @@ class Router:
         else: 
             return True   
 
-    # ATTRIBUTION : https://www.geeksforgeeks.org/binary-decimal-vice-versa-python/ 
-    # Our intent is to manually transform binary numbers (without the python xb0) into decimal numbers
-    # This is a trivial method that handles conversion without any weird xb0
-    def binary_to_decimal(self, binary):
-        decimal, i = 0, 0
-        while(binary != 0):
-            dec = binary % 10
-            decimal = decimal + dec * pow(2, i)
-            binary = binary//10
-            i += 1
-        return (decimal)
+    
+    # Given a b
+    def binary_to_decimal(self, octet):
+        bin_array = []
+        for i in range(len(octet)):
+            bin_array[i] = int(octet[i])
+        bin_array.reverse()
+
+        decimal = 0
+        for i in range(len(bin_array)):
+            decimal += bin_array[i] * pow(2, i)
+        return decimal
+
 
     # takes in a netmask length -> convert to the binary version -> convert to decimal netmask address 
     # if netmask len = 9 -> bin = 11111111.11111111.10000000.00000000 -> 255.255.128.0 
@@ -347,7 +349,7 @@ class Router:
         })
         self.send(msg_dict["src"], table_msg)
 
-    # R
+    # Re-builds the forwarding table from saved announcements an revocations
     def reset_fwd_table(self):
         self.fwd_table = []
         for msg in self.announcements:
