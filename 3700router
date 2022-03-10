@@ -163,6 +163,7 @@ class Router:
             decimal = decimal + dec * pow(2, i)
             binary = binary//10
             i += 1
+        print("DECIMAL: ", decimal)
         return (decimal)
 
     # takes in a netmask length -> convert to the binary version -> convert to decimal netmask address 
