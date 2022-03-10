@@ -135,6 +135,8 @@ class Router:
                     })
                     self.send(n, new_msg)
 
+        self.aggregate()
+
     def all_else_same(n1, n2):
         if n1["localpref"] != n2["localpref"]:
             return False 
