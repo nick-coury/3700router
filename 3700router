@@ -156,7 +156,7 @@ class Router:
     # ATTRIBUTION : https://www.geeksforgeeks.org/binary-decimal-vice-versa-python/ 
     # Our intent is to manually transform binary numbers (without the python xb0) into decimal numbers
     # This is a trivial method that handles conversion without any weird xb0
-    def binary_to_decimal (self, binary):
+    def binary_to_decimal(self, binary):
         decimal, i = 0, 0
         while(binary != 0):
             dec = binary % 10
@@ -265,6 +265,7 @@ class Router:
     # returns the /X number in CIDR addresses 
     def get_cidr_len(self, netmask):
         ones = 0
+        print("netmask: ", netmask)
         for i in range(32):
             if netmask[i] == "1":
                 ones += 1
