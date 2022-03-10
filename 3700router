@@ -199,8 +199,8 @@ class Router:
         network_bin = self.to_binary(network)
         netmask_bin = self.to_binary(netmask)
 
-        print("network_bin: ", network_bin)
-        print("netmask_bin: ", netmask_bin)
+        print("XXXXX network_bin: ", network_bin)
+        print("XXXXX netmask_bin: ", netmask_bin)
         final = ""
         for i in range(32):
             if network_bin[i] == "1" and netmask_bin[i] == "1":
@@ -208,7 +208,7 @@ class Router:
             else: 
                 final += "0"
 
-        print("final_bin: ", final)     
+        print("final_bin: ", final) 
         return final
 
     # print(str(10).zfill(4))
@@ -228,6 +228,7 @@ class Router:
             cidr_len = self.get_cidr_len(n["netmask"])
 
             print("--------------------")
+            print("cidr len: ", cidr_len)
             print("dst : ", dst)
             print("network : ", n["network"])
             print(self.netmask_this(dst, n["netmask"]))
