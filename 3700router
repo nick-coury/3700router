@@ -222,12 +222,12 @@ class Router:
         matching_ips = []
         longest_prefix_length = 0
         for n in self.fwd_table:
-            cider_len = self.get_cider_len(n["netmask"])
-            if self.netmask_this(dst, n["netmask"])[0:cider_len] == self.netmask_this(n["network"], n["netmask"])[0:cider_len]:
-                if cider_len == longest_prefix_length:
+            cidr_len = self.get_cidr_len(n["netmask"])
+            if self.netmask_this(dst, n["netmask"])[0:cidr_len] == self.netmask_this(n["network"], n["netmask"])[0:cidr_len]:
+                if cidr_len == longest_prefix_length:
                     matching_ips.append(copy.deepcopy(n))
-                elif cider_len > longest_prefix_length:
-                    longest_prefix_length = cider_len
+                elif cidr_len > longest_prefix_length:
+                    longest_prefix_length = cidr_len
                     matching_ips = []
                     matching_ips.append(copy.deepcopy(n))
         #print("matching ips: ")
