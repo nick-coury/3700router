@@ -182,8 +182,6 @@ class Router:
 
         str_bin_network = first_final + second_final + third_final + fourth_final
 
-        print (str_bin_network, "----------------------------------------------------")
-
         return str_bin_network
         
     
@@ -230,7 +228,7 @@ class Router:
                     longest_prefix_length = cidr_len
                     matching_ips = []
                     matching_ips.append(copy.deepcopy(n))
-        #print("matching ips: ")
+        print("------ matching ips: ", matching_ips)
         return matching_ips
 
     def data(self, msg_dict, srcif):
