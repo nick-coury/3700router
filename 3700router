@@ -137,7 +137,7 @@ class Router:
 
         self.aggregate()
 
-    def all_else_same(n1, n2):
+    def all_else_same(self, n1, n2):
         if n1["localpref"] != n2["localpref"]:
             return False 
         elif n1["selfOrigin"] != n2["selfOrigin"]:
@@ -238,11 +238,6 @@ class Router:
                                 return self.aggregate()
         return
                                 
-                                
-         
-
-        
-
     # network comes in as XXXX.XXXX.XXXX.XXXX -> 10101010101010101010 <- 4 quads worth of binary in str form
     def to_binary(self, network):
         str_bin_network = ""
