@@ -157,7 +157,7 @@ class Router:
     def binary_to_decimal(self, octet):
         bin_array = []
         for i in range(8):
-            bin_array[i] = int(octet[i])
+            bin_array.append(int(octet[i]))
         bin_array.reverse()
 
         decimal = 0
