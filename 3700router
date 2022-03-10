@@ -347,10 +347,11 @@ class Router:
         })
         self.send(msg_dict["src"], table_msg)
 
+    # R
     def reset_fwd_table(self):
         self.fwd_table = []
         for msg in self.announcements:
-            self.update(msg)
+            self.update_fwd_table(msg)
         for msg in self.revocations :
             self.remove_from_fwd_table(msg) 
         self.aggregate()       
@@ -364,7 +365,6 @@ class Router:
                     self.fwd_table.remove(n)
                     return True
         return False
-
 
     # Logic for handling withdraw messages
     def withdraw(self, msg_dict, srcif):
