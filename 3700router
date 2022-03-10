@@ -221,6 +221,14 @@ class Router:
         longest_prefix_length = 0
         for n in self.fwd_table:
             cidr_len = self.get_cidr_len(n["netmask"])
+
+            print("--------------------")
+            print("dst : ", dst)
+            print("network : ", n["network"])
+            print(self.netmask_this(dst, n["netmask"]))
+            print(self.netmask_this(n["network"], n["netmask"]))
+            print("--------------------")
+
             if self.netmask_this(dst, n["netmask"])[0:cidr_len] == self.netmask_this(n["network"], n["netmask"])[0:cidr_len]:
                 if cidr_len == longest_prefix_length:
                     matching_ips.append(copy.deepcopy(n))
@@ -259,9 +267,10 @@ class Router:
         #         no_match = False
         # # if no match and legal to forward then send         
         matching_ips = self.longest_prefix_match(msg_dict["dst"])
+        print("------------- msg dst ------------ : ", msg_dict["dst"])
         if len(matching_ips) != 0:  
             final_ip = self.get_best_ip(matching_ips)
-
+            print("---------- final ip ---------- : ", final_ip)
             if ((self.relations[srcif] == "cust") or (self.relations[final_ip] == "cust")) :
                 self.send(final_ip, new_msg)
         else:
@@ -274,6 +283,7 @@ class Router:
 
             # final_ip = self.get_best_ip(matching_ips)
             #print("-----------------NOMATCH------------------------------")
+            
             new_msg = json.dumps({"src": self.our_addr(srcif), 
             "dst": msg_dict["src"], 
             "type": "no route", 
