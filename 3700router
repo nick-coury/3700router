@@ -170,12 +170,15 @@ class Router:
         # Transform each quad into binary
         first_quad = str(bin(quads[0]))
         first_final =  first_quad[2:len(first_quad)].zfill(8)
+        print("first final: ", first_final)
 
         second_quad = str(bin(quads[1]))
         second_final = second_quad[2:len(second_quad)].zfill(8)
+        print("second final: ", second_final)
 
         third_quad = str(bin(quads[2]))
         third_final = third_quad[2:len(third_quad)].zfill(8)
+        print("third final: ", third_final)
 
         fourth_quad = str(bin(quads[3]))
         fourth_final = fourth_quad[2:len(fourth_quad)].zfill(8)
@@ -189,7 +192,6 @@ class Router:
     # returns the /X number in CIDR addresses 
     def get_cidr_len(self, netmask):
         ones = 0
-        bin_netmask = self.to_binary(netmask)
         print("**********")
         print("netmask: ", bin_netmask)
         print("netmask length: ",len(bin_netmask))
