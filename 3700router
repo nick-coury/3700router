@@ -1,9 +1,6 @@
 #!/usr/bin/env -S python3 -u
 
 import argparse, socket, time, json, select, struct, sys, math, copy
-from concurrent.futures.process import _MAX_WINDOWS_WORKERS
-from tkinter.tix import INTEGER
-
 
 class Router:
     # enum: cust | prov | peer
@@ -42,10 +39,6 @@ class Router:
             self.ports[neighbor] = int(port)
             self.relations[neighbor] = relation
 
-            # print("Router IP", neighbor)
-            # print("Sockets", self.sockets)
-            # print("Ports", self.ports)
-
             self.send(neighbor, json.dumps({ "type": "handshake", "src": self.our_addr(neighbor), "dst": neighbor, "msg": {}  }))
 
     def our_addr(self, dst):
@@ -55,19 +48,6 @@ class Router:
 
     def send(self, network, message):
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
-
-    # def update_fwd_table(self, update_msg_dict):
-    #     self.fwd_table.append(update_msg_dict)
-    #     #[update_msg_dict["src"]] = update_msg_dict["msg"]
-
-    #     # DEBUG
-    #     #print("---updated fwd table---")
-    #     self.print_table()
-        
-    def print_table(self):    
-        print("------TABLE-------")
-        print(self.fwd_table)
-        print("------------------")
 
     #   1. The entry with the highest localpref wins. If the localprefs are equal
     #   2. The entry with selfOrigin as true wins. If all selfOrigins are the equal
@@ -110,15 +90,19 @@ class Router:
             elif(best_ip > curr_ip):
                 best_ip = curr_ip
         return best_ip
-        
+    
+    # Updates the forwarding table given an update message    
+    def update_fwd_table(self, msg_dict):
+        new_entry = copy.deepcopy(msg_dict["msg"])
+        new_entry["peer"] = msg_dict["src"]
+        self.fwd_table.append(new_entry)
 
+    # Handles logic for update messages
     def update(self, msg_dict, srcif):
         # save a copy of the announcement from the neighbor 
         self.announcements.append(copy.deepcopy(msg_dict))
         # add entry to fwd table
-        new_entry = copy.deepcopy(msg_dict["msg"])
-        new_entry["peer"] = msg_dict["src"]
-        self.fwd_table.append(new_entry)
+        self.update_fwd_table(msg_dict)
 
         # Remove private info from the message 
         extracted_network_msg = copy.deepcopy(msg_dict["msg"])
@@ -128,15 +112,6 @@ class Router:
 
         # add ourselves to the ASPath 
         extracted_network_msg["ASPath"].insert(0, self.asn)
-
-        # received_from = "0"
-        # # Obtain the relation from the recieved message
-        # for n in self.sockets:
-        #     if n == msg_dict["src"]:
-        #         received_from = n
-        #         break
-        #     if received_from == 0:
-        #         raise Exception("No match from received message")
 
         # Update received from a customer: send updates to all other neighbors
         if(self.relations[srcif] == "cust"):
@@ -160,25 +135,125 @@ class Router:
                     })
                     self.send(n, new_msg)
 
-        #self.print_table()
+    def all_else_same(n1, n2):
+        if n1["localpref"] != n2["localpref"]:
+            return False 
+        elif n1["selfOrigin"] != n2["selfOrigin"]:
+            return False 
+        elif n1["localpref"] != n2["localpref"]:
+            return False
+        elif n1["ASPath"] != n2["ASPath"]:
+            return False
+        elif n1["origin"] != n2["origin"]:
+            return False
+        elif n1["netmask"] != n2["netmask"]:
+            return False
+        else: 
+            return True   
 
-    # network comes in as [XXXX.XXXX.XXXX.XXXX] -> 10101010101010101010 <- 4 quads worth of binary in str form
+    # ATTRIBUTION : https://www.geeksforgeeks.org/binary-decimal-vice-versa-python/ 
+    # Our intent is to manually transform binary numbers (without the python xb0) into decimal numbers
+    # This is a trivial method that handles conversion without any weird xb0
+    def binary_to_decimal (self, binary):
+        decimal, i = 0, 0
+        while(binary != 0):
+            dec = binary % 10
+            decimal = decimal + dec * pow(2, i)
+            binary = binary//10
+            i += 1
+        return (decimal)
+
+    # takes in a netmask length -> convert to the binary version -> convert to decimal netmask address 
+    # if netmask len = 9 -> bin = 11111111.11111111.10000000.00000000 -> 255.255.128.0 
+    def make_netmask(self, len):
+        bin_cidr1 = ""
+        bin_cidr2 = ""
+        bin_cidr3 = ""
+        bin_cidr4 = ""
+        for i in range(8):
+            if(i < len):
+                bin_cidr1 += "1"
+            else:
+                bin_cidr1 += "0"
+        octet1 = self.binary_to_decimal(int(bin_cidr1))
+
+        for i in range(9, 16):
+            if(i < len):
+                bin_cidr2 += "1"
+            else:
+                bin_cidr2 += "0"
+        octet2 = self.binary_to_decimal(int(bin_cidr2))
+        
+        for i in range(17, 24):
+            if(i < len):
+                bin_cidr3 += "1"
+            else:
+                bin_cidr3 += "0"
+        octet3 = self.binary_to_decimal(int(bin_cidr3))
+
+        for i in range(25, 32):
+            if(i < len):
+                bin_cidr4 += "1"
+            else:
+                bin_cidr4 += "0"
+        octet4 = self.binary_to_decimal(int(bin_cidr4))
+        
+        return str(octet1) + "." + str(octet2) + "." + str(octet3) + "." + str(octet4)
+
+
+    # handle aggregation:
+    # loop thru fwd_table 
+    #   loop thru fwd_table (except its own entry)
+    #       if (subnet mask of current with cidr len - 1) == (subnet mask of next with cidr len - 1) and all else same
+    #           aggregate by removing the next entry, and decrementing the cidr len (changes the last quad in the subnet mask)
+    def aggregate(self):
+        for curr_entry in self.fwd_table:
+            for compare_entry in self.fwd_table:
+                if(curr_entry != compare_entry):
+                    if(self.all_else_same(curr_entry, compare_entry)):
+                        
+                        # calculate the new netmask length (old netmask len - 1)
+                        new_netmask_len = self.get_cidr_len(compare_entry["netmask"]) - 1
+                        # generate a new netmask based on the new netmask length
+                        new_netmask = self.make_netmask(new_netmask_len)
+                        # save off the current entry's netmask
+                        curr_cidr_addr = self.netmask_this(curr_entry["network"], new_netmask)
+                        # save off the compare to entry's netmask
+                        compare_cidr_addr = self.netmask_this(compare_entry["network"], new_netmask)
+                        
+                        # If the netmasks are the same (and everything else is too)
+                        if(curr_cidr_addr[0:new_netmask_len] == compare_cidr_addr[0:new_netmask_len]):
+                            # if you aggregate, remove the entry with the larger network ip
+                            if(curr_entry["network"] < compare_entry["network"]):
+                                self.fwd_table.remove(compare_entry)
+                                curr_entry["netmask"] = new_netmask
+                                return self.aggregate()
+                                
+                            else:
+                                self.fwd_table.remove(curr_entry)
+                                compare_entry["netmask"] = new_netmask
+                                return self.aggregate()
+        return
+                                
+                                
+         
+
+        
+
+    # network comes in as XXXX.XXXX.XXXX.XXXX -> 10101010101010101010 <- 4 quads worth of binary in str form
     def to_binary(self, network):
         str_bin_network = ""
         quads = list(int(qdn) for qdn in network.split('.'))
 
-        # Transform each quad into binary
+        # Transform each quad into binary, omitting the leading "0b" and filling leading 0's
         first_quad = str(bin(quads[0]))
         first_final =  first_quad[2:len(first_quad)].zfill(8)
-        #print("first final: ", first_final)
 
         second_quad = str(bin(quads[1]))
         second_final = second_quad[2:len(second_quad)].zfill(8)
-        #print("second final: ", second_final)
 
         third_quad = str(bin(quads[2]))
         third_final = third_quad[2:len(third_quad)].zfill(8)
-        #print("third final: ", third_final)
 
         fourth_quad = str(bin(quads[3]))
         fourth_final = fourth_quad[2:len(fourth_quad)].zfill(8)
@@ -192,37 +267,23 @@ class Router:
     # returns the /X number in CIDR addresses 
     def get_cidr_len(self, netmask):
         ones = 0
-        print("**********")
-        print("netmask: ", netmask)
-        print("netmask length: ",len(netmask))
-        print("**********")
         for i in range(32):
             if netmask[i] == "1":
                 ones += 1
-        # for bit in netmask:
-        #     if bit == "1":
-        #         ones += 1
         return ones
     
     # network comes in as [123.123.123.123] [255.255.0.0] -> [bin bin 0 0] (netmasked ip)
     def netmask_this(self, network, netmask): 
         network_bin = self.to_binary(network)
         netmask_bin = self.to_binary(netmask)
-
-        #print("XXXXX network_bin: ", network_bin)
-        #print("XXXXX netmask_bin: ", netmask_bin)
         final = ""
         for i in range(32):
             if network_bin[i] == "1" and netmask_bin[i] == "1":
                 final += "1"
             else: 
                 final += "0"
-
-        #print("final_bin: ", final) 
         return final
 
-    # print(str(10).zfill(4))
-    # Expected output: "0010"
 
     # Takes in a destination ip and returns a list of ALL matching ips with the longest matching prefix
     def longest_prefix_match(self, dst):
@@ -237,14 +298,6 @@ class Router:
         for n in self.fwd_table:
             cidr_len = self.get_cidr_len(self.to_binary(n["netmask"]))
 
-            print("--------------------")
-            print("cidr len: ", cidr_len)
-            print("dst : ", dst)
-            print("network : ", n["network"])
-            print(self.netmask_this(dst, n["netmask"]))
-            print(self.netmask_this(n["network"], n["netmask"]))
-            print("--------------------")
-
             if self.netmask_this(dst, n["netmask"])[0:cidr_len] == self.netmask_this(n["network"], n["netmask"])[0:cidr_len]:
                 if cidr_len == longest_prefix_length:
                     matching_ips.append(copy.deepcopy(n))
@@ -252,9 +305,10 @@ class Router:
                     longest_prefix_length = cidr_len
                     matching_ips = []
                     matching_ips.append(copy.deepcopy(n))
-        print("------ matching ips: ", matching_ips)
+       
         return matching_ips
 
+    # Logic for handling data messages
     def data(self, msg_dict, srcif):
         # in the future this will be where we handle data forwarding logic 
         # if our router hears a data message,  source is the dst in the fwd table
@@ -270,60 +324,39 @@ class Router:
         
         # Select best network
         #   0. Longest prefix match
-        #self.print_table()
-        # no_match = True
-        # for n in self.fwd_table:
-        #     dict_quads = list(int(qdn) for qdn in msg_dict["dst"].split('.'))
-        #     temp = n
-        #     fwd_quads = list(int(qdn) for qdn in temp["network"].split('.'))
-        #     if (dict_quads[0] == fwd_quads[0]):
-        #         # Send message to network
-        #         # add the matched network to the list of matching IP's
-        #         matching_ips.append(n) # = self.fwd_table[n]
-        #         no_match = False
-        # # if no match and legal to forward then send         
+        # if no match and legal to forward then send         
         matching_ips = self.longest_prefix_match(msg_dict["dst"])
-        print("------------- msg dst ------------ : ", msg_dict["dst"])
+
         if len(matching_ips) != 0:  
             final_ip = self.get_best_ip(matching_ips)
-            print("---------- final ip ---------- : ", final_ip)
             if ((self.relations[srcif] == "cust") or (self.relations[final_ip] == "cust")) :
                 self.send(final_ip, new_msg)
+        # No route message
         else:
-            # for n in self.fwd_table:
-            #     dict_quads_back= list(int(qdn) for qdn in msg_dict["src"].split('.'))
-            #     temp = n #self.fwd_table[n]
-            #     fwd_quads_back = list(int(qdn) for qdn in temp["network"].split('.'))
-            #     if(dict_quads_back[0] == fwd_quads_back[0]):
-            #         matching_ips.append(n)
-
-            # final_ip = self.get_best_ip(matching_ips)
-            #print("-----------------NOMATCH------------------------------")
-            
             new_msg = json.dumps({"src": self.our_addr(srcif), 
             "dst": msg_dict["src"], 
             "type": "no route", 
             "msg": {},
             })
-            #print("we are sending a no route to: ", n)
             self.send(srcif, new_msg)
         
-
+    # Logic for handling dump messages 
     def dump(self, msg_dict):
         table_msg = json.dumps({"src": msg_dict["dst"], 
         "dst": msg_dict["src"], # the message's new destination is the original message's source 
         "type": "table", 
         "msg": self.fwd_table,
         })
-        #print("XXXXXX ", new_msg)
         self.send(msg_dict["src"], table_msg)
 
+    # Logic for handling withdraw messages
     def withdraw(self, msg_dict, srcif):
         # First save a copy of the withdraw message 
         self.revocations.append(copy.deepcopy(msg_dict))
 
         # Next update the forwarding table by removing all networks in the fwd_table inside the msg_dict
         rmv_list = copy.deepcopy(msg_dict["msg"])
+
         for to_remove in rmv_list:
             for n in self.fwd_table:
                 if n["peer"] == msg_dict["src"] and n["netmask"] == to_remove["netmask"] and n["network"] == to_remove["network"]:
@@ -340,6 +373,7 @@ class Router:
                     "msg": msg_dict["msg"]
                     })
                     self.send(n, new_msg)
+
         # Revocation received from a peer or a provider: only send updates to your customers
         else:
             for n in self.sockets:
@@ -354,17 +388,18 @@ class Router:
     def run(self):
         while True:
             socks = select.select(self.sockets.values(), [], [], 0.1)[0]
+            
             for conn in socks:
                 k, addr = conn.recvfrom(65535)
                 srcif = None
+
                 for sock in self.sockets:
                     if self.sockets[sock] == conn:
                         srcif = sock
                         break
+                    
                 # a specific message for the current socket in the list of sockets 
                 msg = k.decode('utf-8')
-
-                print("Received message '%s' from %s" % (msg, srcif))
                 msg_dict = json.loads(msg)
 
                 # Choose what to do with the received messaged based on the type
@@ -377,33 +412,10 @@ class Router:
                 # if a dump message, reply with our forwarding table
                 elif(msg_dict["type"] == "dump"):
                     self.dump(msg_dict)
+                # if a withdraw message, forward copies of the revocation announcement 
                 elif(msg_dict["type"] == "withdraw"):
                     self.withdraw(msg_dict, srcif)             
     
-
-# Recieved 
-# 192.168.0.25 
-# To compare >> binary, compare with table in binary + netmask
-
-# Table
-# 192.168.0.1 << 255.255.255.0
-# 172.168.0.1 << 255.255.0.0
-
-# {'src': '192.168.0.2', 'dst': '192.168.0.1', 'type': 'update', 'msg': {'network': '192.168.0.0', 'netmask': '255.255.255.0', 'ASPath': [1]}}
-# {'msg': {'netmask': '255.255.255.0', 'ASPath': [14, 1], 'network': '192.168.0.0'}, 'src': '172.168.0.1', 'dst': '172.168.0.2', 'type': 'update'}
-
-# {"src": "192.168.0.2", "dst": "192.168.0.1", "type": "update", "msg": {"network": "192.168.0.0", "netmask": "255.255.255.0", "ASPath": [1]}}
-
-# From peer 172
-# Expected {'msg': {'netmask': '255.255.255.0', 'ASPath': [14, 1], 'network': '192.168.0.0'}, 'src': '172.168.0.1', 'dst': '172.168.0.2', 'type': 'update'}
-# Recevied {'src': '192.168.0.1', 'dst': '192.168.0.2', 'type': 'update', 'msg': {'network': '192.168.0.0', 'netmask': '255.255.255.0', 'ASPath': [14, 1]}}
-
-# Peer 192.168.0.2 did not receive expected route announcement {'msg': {'netmask': '255.255.0.0', 'ASPath': [14, 2], 'network': '172.168.0.0'}, 'src': '192.168.0.1', 'dst': '192.168.0.2', 'type': 'update'}
-# Peer 192.168.0.2 received unexpected route announcement      {'src': '172.168.0.1', 'dst': '172.168.0.2', 'type': 'update', 'msg': {'network': '172.168.0.0', 'netmask': '255.255.0.0', 'ASPath': [14, 2]}}
-
-# ours: '{'network': '172.168.0.0', 'netmask': '255.255.0.0', 'localpref': 100, 'ASPath': [14, 2], 'origin': 'EGP', 'selfOrigin': True, 'peer': '172.168.0.2'}'
-# want: '{'origin': 'EGP', 'localpref': 100, 'network': '172.168.0.0', 'ASPath': [2], 'netmask': '255.255.0.0', 'peer': '172.168.0.2', 'selfOrigin': True}'
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='route packets')
     parser.add_argument('asn', type=int, help="AS number of this router")
