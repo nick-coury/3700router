@@ -168,16 +168,16 @@ class Router:
         quads = list(int(qdn) for qdn in network.split('.'))
 
         # Transform each quad into binary
-        first_quad = str(bin(quads[0])) #.zfill(8)
+        first_quad = str(bin(quads[0]))
         first_final =  first_quad[2:len(first_quad)].zfill(8)
 
-        second_quad = str(bin(quads[1])).zfill(8)
+        second_quad = str(bin(quads[1]))
         second_final = second_quad[2:len(second_quad)].zfill(8)
 
-        third_quad = str(bin(quads[2])).zfill(8)
+        third_quad = str(bin(quads[2]))
         third_final = third_quad[2:len(third_quad)].zfill(8)
 
-        fourth_quad = str(bin(quads[3])).zfill(8)
+        fourth_quad = str(bin(quads[3]))
         fourth_final = fourth_quad[2:len(fourth_quad)].zfill(8)
 
         str_bin_network = first_final + second_final + third_final + fourth_final
