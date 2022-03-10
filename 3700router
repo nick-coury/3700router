@@ -207,33 +207,33 @@ class Router:
     #       if (subnet mask of current with cidr len - 1) == (subnet mask of next with cidr len - 1) and all else same
     #           aggregate by removing the next entry, and decrementing the cidr len (changes the last quad in the subnet mask)
     def aggregate(self):
-        for i in range(20):
-            for curr_entry in self.fwd_table:
-                for compare_entry in self.fwd_table:
-                    if(curr_entry != compare_entry):
-                        if(self.all_else_same(curr_entry, compare_entry)):
-                            
-                            # calculate the new netmask length (old netmask len - 1)
-                            new_netmask_len = self.get_cidr_len(compare_entry["netmask"]) - 1
-                            # generate a new netmask based on the new netmask length
-                            new_netmask = self.make_netmask(new_netmask_len)
-                            # save off the current entry's netmask
-                            curr_cidr_addr = self.netmask_this(curr_entry["network"], new_netmask)
-                            # save off the compare to entry's netmask
-                            compare_cidr_addr = self.netmask_this(compare_entry["network"], new_netmask)
-                            
-                            # If the netmasks are the same (and everything else is too)
-                            if(curr_cidr_addr[0:new_netmask_len] == compare_cidr_addr[0:new_netmask_len]):
-                                # if you aggregate, remove the entry with the larger network ip
-                                if(curr_entry["network"] < compare_entry["network"]):
-                                    self.fwd_table.remove(compare_entry)
-                                    curr_entry["netmask"] = new_netmask
-                                    return self.aggregate()
-                                    
-                                else:
-                                    self.fwd_table.remove(curr_entry)
-                                    compare_entry["netmask"] = new_netmask
-                                    return self.aggregate()
+        for curr_entry in self.fwd_table:
+            for compare_entry in self.fwd_table:
+                if(curr_entry != compare_entry):
+                    print("all else same between: ", curr_entry, " and ", compare_entry)
+                    if(self.all_else_same(curr_entry, compare_entry)):
+                        print("!!!!!!!!!!!!!!!!!!!YAY!!!!!!!!!!!!!!!!!!")
+                        # calculate the new netmask length (old netmask len - 1)
+                        new_netmask_len = self.get_cidr_len(compare_entry["netmask"]) - 1
+                        # generate a new netmask based on the new netmask length
+                        new_netmask = self.make_netmask(new_netmask_len)
+                        # save off the current entry's netmask
+                        curr_cidr_addr = self.netmask_this(curr_entry["network"], new_netmask)
+                        # save off the compare to entry's netmask
+                        compare_cidr_addr = self.netmask_this(compare_entry["network"], new_netmask)
+                        
+                        # If the netmasks are the same (and everything else is too)
+                        if(curr_cidr_addr[0:new_netmask_len] == compare_cidr_addr[0:new_netmask_len]):
+                            # if you aggregate, remove the entry with the larger network ip
+                            if(curr_entry["network"] < compare_entry["network"]):
+                                self.fwd_table.remove(compare_entry)
+                                curr_entry["netmask"] = new_netmask
+                                return self.aggregate()
+                                
+                            else:
+                                self.fwd_table.remove(curr_entry)
+                                compare_entry["netmask"] = new_netmask
+                                return self.aggregate()
         return
                                 
                                 
