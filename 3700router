@@ -189,12 +189,13 @@ class Router:
     # returns the /X number in CIDR addresses 
     def get_cidr_len(self, netmask):
         ones = 0
+        bin_netmask = self.to_binary(netmask)
         print("**********")
-        print("netmask: ", netmask)
-        print("netmask length: ",len(netmask))
+        print("netmask: ", bin_netmask)
+        print("netmask length: ",len(bin_netmask))
         print("**********")
         for i in range(32):
-            if netmask[i] == "1":
+            if bin_netmask[i] == "1":
                 ones += 1
         # for bit in netmask:
         #     if bit == "1":
@@ -232,7 +233,7 @@ class Router:
         matching_ips = []
         longest_prefix_length = 0
         for n in self.fwd_table:
-            cidr_len = self.get_cidr_len(n["netmask"])
+            cidr_len = self.get_cidr_len(self.to_binary(n["netmask"]))
 
             print("--------------------")
             print("cidr len: ", cidr_len)
